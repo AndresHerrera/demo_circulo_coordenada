@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Demo circulo en coordenada</title>
+    <link rel="stylesheet" href="lib/leaflet/leaflet.css" />
+    <script src="lib/leaflet/leaflet.js"></script>
+    <link rel="stylesheet" href="lib/leaflet-groupedlayercontrol/leaflet.groupedlayercontrol.min.css" />
+    <script src="lib/leaflet-groupedlayercontrol/leaflet.groupedlayercontrol.min.js"></script>
+    <link rel="stylesheet" href="lib/leaflet-easybutton/easy-button.css" />
+    <script src="lib/leaflet-easybutton/easy-button.js"></script>
+    <script src="lib/jquery/jquery-3.4.1.js"></script>
+    <script src="lib/turf.min.js"></script>
+
+    <style>
+        .rojo {
+            background-color: #DA2C00;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="divmap" style="width: 100%; height: 600px;"></div>
+    <div id="iss_coords"></div>
+    <div id="iss_info"></div>
+
+    <script>
+        var basemaps = {
+            Streets: L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            })
+        };
+
+        var map = L.map('divmap', {
+            zoom: 10
+        }).setView([3.42335, -76.52086], 8);
+
+        basemaps.Streets.addTo(map);
+
+
+        var ISSIcon = L.icon({
+            iconUrl: 'images/iss_icon.svg',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [16, 16],
+        });
+
+        var home_location = [3.44420, -76.47892];
+
+        var issLocation = L.marker(home_location, {
+            icon: ISSIcon
+        }).addTo(map);
+
+        var isscirc = L.circle(home_location, 50e3, {
+            color: '#f03',
+            fillColor: 'green',
+            fillOpacity: 0.2
+        }).addTo(map);
+
+
+        var home = L.marker(home_location).addTo(map).bindPopup("<b>Hello AT</b>");
+
+        var groupedOverlays = {
+            "Estaci&oacute;n Espacial": {
+                "Ubicaci&oacute;n Actual": issLocation
+            },
+        };
+
+        L.control.groupedLayers(basemaps, groupedOverlays).addTo(map);
+
+        var geojsonGc = L.geoJson();
+
+        function dibujarLineaGreatCircle(gc) {
+            map.removeLayer(geojsonGc);
+            geojsonGc = L.geoJson(gc, {
+                color: "blue"
+            });
+            geojsonGc.addTo(map);
+        }
+
+        var geojsonSector = L.geoJson();
+
+        function moverVehiculo() {
+            $.getJSON('http://api.open-notify.org/iss-now.json?callback=?', function(data) {
+                var lat = data['iss_position']['latitude'];
+                var lon = data['iss_position']['longitude'];
+                issLocation.setLatLng([lat, lon]);
+                isscirc.setLatLng([lat, lon]);
+
+                map.panTo([lat, lon], animate = true);
+
+
+                var from = turf.point(home_location);
+                var to = turf.point([lat, lon]);
+                var options = {
+                    units: 'kilometers'
+                };
+                var distance = turf.distance(from, to, options);
+
+                greatCircle = turf.greatCircle(turf.flip(from), turf.flip(to), {
+                    properties: {
+                        name: 'Cali to ISS'
+                    }
+                });
+                dibujarLineaGreatCircle(greatCircle);
+
+                //---------------------
+                //dibuja sector -- podria servir para indicar un area delimitada apuntando hacia una direccion 
+                //---------------------
+                var rnd = (parseInt(Math.random() * 24)) * 15; //
+                var radius = 50;
+                var bearing1 = rnd; //25;
+                var bearing2 = rnd + 25; //45; 
+                var sector = turf.sector(turf.flip(to), radius, bearing1, bearing2);
+                map.removeLayer(geojsonSector);
+                geojsonSector = L.geoJson(sector, {
+                    color: "purple"
+                });
+                geojsonSector.addTo(map);
+                //---------------------------
+
+                $('#iss_coords').html(`<h3>Coordenadas<br>
+									Latitud: 
+									<span class='rojo'>${lat}</span> 
+									Longitud: 
+									<span class='rojo'>${lon}</span>
+									<br>
+									Distancia hasta Cali:
+									<span class='rojo'>${distance.toFixed(3)} km </span>
+									</h3>`);
+            });
+            setTimeout(moverVehiculo, 5000);
+        }
+
+        moverVehiculo();
+    </script>
+
+</body>
+
+</html>
